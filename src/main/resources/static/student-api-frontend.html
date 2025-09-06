@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Student Management UI</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 20px;
+        background: #f7f9fc;
+        color: #222;
+      }
+      h1 {
+        margin-bottom: 6px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 6px 18px rgba(20, 30, 60, 0.06);
+        padding: 16px;
+        margin-bottom: 18px;
+      }
+      label {
+        display: block;
+        margin-top: 8px;
+        font-size: 14px;
+      }
+      input[type="text"],
+      input[type="number"],
+      input[type="email"] {
+        width: 100%;
+        padding: 8px;
+        margin-top: 6px;
+        box-sizing: border-box;
+        border-radius: 6px;
+        border: 1px solid #dfe6ee;
+      }
+      button {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #2563eb;
+        color: #fff;
+      }
+      button.ghost {
+        background: transparent;
+        border: 1px solid #cbd5e1;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px;
+        border-bottom: 1px solid #eef2f7;
+      }
+      th {
+        background: #fbfdff;
+      }
+      .actions button {
+        margin-right: 6px;
+      }
+      .flex {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .small {
+        font-size: 13px;
+      }
+      .muted {
+        color: #64748b;
+      }
+      .error {
+        color: #b91c1c;
+      }
+      .success {
+        color: #065f46;
+      }
+      #message {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Student Management UI</h1>
+    <div class="card">
+      <strong>Add / Update Student</strong>
+      <form id="studentForm">
+        <input type="hidden" id="studentId" />
+        <label for="name">Name</label>
+        <input id="name" type="text" required />
+
+        <label for="email">Email</label>
+        <input id="email" type="email" required />
+
+        <label for="age">Age</label>
+        <input id="age" type="number" required min="1" />
+
+        <div style="margin-top: 12px">
+          <button class="primary" id="saveBtn">Save</button>
+          <button type="button" class="ghost" id="resetBtn">Reset</button>
+        </div>
+      </form>
+      <div id="message" class="small muted"></div>
+    </div>
+
+    <div class="card">
+      <div class="flex">
+        <strong>Students</strong>
+        <div style="margin-left: auto" class="small muted">
+          Click "Edit" to load student into the form
+        </div>
+      </div>
+
+      <table id="studentsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Age</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script>
+      // Configuration: API base URL. Update if your backend runs at other host/port.
+      const API_BASE = "http://localhost:8080";
+
+      const $ = (sel) => document.querySelector(sel);
+      const $all = (sel) => document.querySelectorAll(sel);
+
+      const form = $("#studentForm");
+      const idField = $("#studentId");
+      const nameField = $("#name");
+      const emailField = $("#email");
+      const ageField = $("#age");
+      const saveBtn = $("#saveBtn");
+      const resetBtn = $("#resetBtn");
+      const msg = $("#message");
+      const tableBody = document.querySelector("#studentsTable tbody");
+
+      // Helpers
+      function showMessage(text, type = "") {
+        msg.textContent = text;
+        msg.className = type
+          ? "small " + (type === "error" ? "error" : "success")
+          : "small muted";
+        if (!text) msg.className = "small muted";
+      }
+
+      function clearForm() {
+        idField.value = "";
+        nameField.value = "";
+        emailField.value = "";
+        ageField.value = "";
+        saveBtn.textContent = "Save";
+      }
+
+      // Load all students and render
+      async function loadStudents() {
+        try {
+          const res = await fetch(`${API_BASE}/students`);
+          if (!res.ok) throw new Error("Failed to fetch students");
+          const students = await res.json();
+          renderStudents(students);
+        } catch (e) {
+          showMessage("Error loading students: " + e.message, "error");
+        }
+      }
+
+      function renderStudents(students) {
+        tableBody.innerHTML = "";
+        if (students.length === 0) {
+          tableBody.innerHTML =
+            '<tr><td colspan="5" class="muted">No students found</td></tr>';
+          return;
+        }
+        students.forEach((s) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td>${s.id ?? ""}</td>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.email)}</td>
+          <td>${s.age ?? ""}</td>
+          <td class="actions">
+            <button data-id="${s.id}" class="editBtn">Edit</button>
+            <button data-id="${s.id}" class="deleteBtn">Delete</button>
+          </td>
+        `;
+          tableBody.appendChild(tr);
+        });
+
+        // attach listeners
+        $all(".editBtn").forEach((b) => b.addEventListener("click", onEdit));
+        $all(".deleteBtn").forEach((b) =>
+          b.addEventListener("click", onDelete)
+        );
+      }
+
+      // Simple escaping
+      function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      async function onEdit(e) {
+        const id = e.target.dataset.id;
+        try {
+          const res = await fetch(`${API_BASE}/students/${id}`);
+          if (res.status === 404) {
+            showMessage("Student not found", "error");
+            return;
+          }
+          const s = await res.json();
+          idField.value = s.id;
+          nameField.value = s.name || "";
+          emailField.value = s.email || "";
+          ageField.value = s.age || "";
+          saveBtn.textContent = "Update";
+          showMessage("Loaded student into form (click Update to save)");
+        } catch (err) {
+          showMessage("Error loading student", "error");
+        }
+      }
+
+      async function onDelete(e) {
+        const id = e.target.dataset.id;
+        if (!confirm("Delete student ID " + id + "?")) return;
+        try {
+          const res = await fetch(`${API_BASE}/students/${id}`, {
+            method: "DELETE",
+          });
+          if (res.status === 204) {
+            showMessage("Deleted student", "success");
+            loadStudents();
+          } else if (res.status === 404) {
+            showMessage("Student not found", "error");
+          } else {
+            showMessage("Failed to delete", "error");
+          }
+        } catch (err) {
+          showMessage("Network error", "error");
+        }
+      }
+
+      // Handle form submit (create or update)
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const payload = {
+          name: nameField.value.trim(),
+          email: emailField.value.trim(),
+          age: Number(ageField.value),
+        };
+        const id = idField.value;
+        try {
+          let res;
+          if (id) {
+            res = await fetch(`${API_BASE}/students/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+              showMessage("Student updated", "success");
+              clearForm();
+              loadStudents();
+            } else if (res.status === 404)
+              showMessage("Student not found", "error");
+            else showMessage("Update failed", "error");
+          } else {
+            res = await fetch(`${API_BASE}/students`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+              const created = await res.json();
+              showMessage("Student created (ID " + created.id + ")", "success");
+              clearForm();
+              loadStudents();
+            } else showMessage("Create failed", "error");
+          }
+        } catch (err) {
+          showMessage("Network error", "error");
+        }
+      });
+
+      resetBtn.addEventListener("click", () => {
+        clearForm();
+        showMessage("Form cleared");
+      });
+
+      // Boot
+      loadStudents();
+    </script>
+  </body>
+</html>
